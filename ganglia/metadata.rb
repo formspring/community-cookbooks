@@ -10,3 +10,7 @@ supports "ubuntu"
 supports "redhat"
 supports "centos"
 supports "fedora"
+
+#The supervisor can be found here: https://github.com/coderanger/chef-supervisor
+# coderanger is Noah Kantrowitz, working for Opscode, I expect the cookbook to be on the repo soon enough
+depends "supervisor"

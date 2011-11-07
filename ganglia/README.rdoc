@@ -8,6 +8,7 @@ http://ganglia.sourceforge.net/
 
 * SELinux must be disabled on CentOS
 * iptables must allow access to port 80
+* supervisor cookbook for unicast https://github.com/coderanger/chef-supervisor
 
 = ATTRIBUTES:
 
@@ -15,6 +16,47 @@ http://ganglia.sourceforge.net/
 
 A run list with "recipe[ganglia]" enables monitoring.
 A run list with "recipe[ganglia::web]" enables the web interface.
+
+== Multicast:
+
+This is the default, nothing to do
+
+== Unicast:
+
+Set node[:ganglia][:mode] to 'inicast'
+
+Setup up a cluster name and a port for each cluster you want to monitor. Put them in a role.
+The cookbook will use roles so it's important these are put in a role and not overriden by the node.
+
+Example:
+
+---
+role/base.rb
+
+override_attributes(
+    #the gmonhead depends on a search on roles, don't allow nodes to screw it up
+    :ganglia => {
+        :cluster => :default,
+        :port => 8649
+    }
+)
+---
+role/redis.rb
+
+run_list "role[base]"
+
+override_attributes(
+    :ganglia => {
+        :cluster => 'redis',
+        :port => 8658
+    }
+)
+---
+
+This will install a head gmond for the cluster 'redis' on port 8658. All nodes having the role 'redis' will report to it.
+
+A current limitation of the unicast mode is that all heads gmond must be on the same machine as the gmetad.
+
 
 = CAVEATS: 
 

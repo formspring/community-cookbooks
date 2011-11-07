@@ -18,31 +18,74 @@
 #
 
 case node[:platform]
-when "ubuntu", "debian"
-  package "ganglia-monitor"
-when "redhat", "centos", "fedora"
-  include_recipe "ganglia::source"
+  when "ubuntu", "debian"
+    package "ganglia-monitor"
+  when "redhat", "centos", "fedora"
+    include_recipe "ganglia::source"
 
-  execute "copy ganglia-monitor init script" do
-    command "cp " +
-      "/usr/src/ganglia-#{node[:ganglia][:version]}/gmond/gmond.init " +
-      "/etc/init.d/ganglia-monitor"
-    not_if "test -f /etc/init.d/ganglia-monitor"
-  end
+    execute "copy ganglia-monitor init script" do
+      command "cp " +
+                  "/usr/src/ganglia-#{node[:ganglia][:version]}/gmond/gmond.init " +
+                  "/etc/init.d/ganglia-monitor"
+      not_if "test -f /etc/init.d/ganglia-monitor"
+    end
 
-  user "ganglia"
+    user "ganglia"
 end
 
 directory "/etc/ganglia"
 
-template "/etc/ganglia/gmond.conf" do
-  source "gmond.conf.erb"
-  variables( :cluster_name => node[:ganglia][:cluster_name] )
-  notifies :restart, "service[ganglia-monitor]"
+#enable python modules
+if node.ganglia.enable_python
+
+  directory "/etc/ganglia/conf.d" do
+    owner 'ganglia'
+  end
+
+  directory "/usr/lib/ganglia/python_modules" do
+  end
+
+  cookbook_file '/etc/ganglia/conf.d/modpython.conf' do
+    source 'modpython.conf'
+    owner 'ganglia'
+  end
 end
 
 service "ganglia-monitor" do
   pattern "gmond"
   supports :restart => true
-  action [ :enable, :start ]
+  action :enable
+end
+
+
+if node[:ganglia][:mode] == 'unicast'
+
+  gmonheads = search(:node, "role:gmonhead").map { |node| node.ipaddress }
+
+  #Read the README to learn how and why to set this up in roles, not in recipes or nodes themselves
+  send_port = node['ganglia']['port'] rescue 8649
+  cluster = node['ganglia']['cluster'] rescue 'default'
+
+  template "/etc/ganglia/gmond.conf" do
+    source "gmond.conf.erb"
+    variables :mode => node.ganglia.mode,
+              :cluster_name => cluster,
+              :gmonheads => gmonheads,
+              :send_port => send_port,
+              :deaf => 'yes',
+              :send_metadata_interval => 60
+    notifies :restart, resources(:service => 'ganglia-monitor')
+  end
+
+
+else
+
+  #do multicast by default, default configuration is multicast
+  template "/etc/ganglia/gmond.conf" do
+    source "gmond.conf.erb"
+    variables :mode => 'multicast',
+              :cluster_name => node[:ganglia][:cluster_name]
+    notifies :restart, resources(:service => 'ganglia-monitor')
+  end
+
 end
